@@ -1,36 +1,40 @@
-<!-- templates/notifications_list.html -->
 {% extends "base.html" %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">通知</h1>
-  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
+<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+  <h1 class="h4 m-0">通知</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
+  </div>
 </div>
 
 <div class="card shadow-sm">
   <div class="card-body">
+
     <p class="text-muted mb-3">
       在庫が「目安」を下回ったときに自動で出ます（同じ品目は未読1件だけ）。
     </p>
 
     {% if notifications %}
-      <div class="list-group">
+      <div class="vstack gap-2">
         {% for n in notifications %}
-          <div class="list-group-item">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-              <div class="flex-grow-1">
+          <div class="border rounded-3 p-3 bg-white">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+
+              <div class="me-auto" style="min-width:260px;">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                   {% if n["is_read"] == 0 %}
-                    <span class="badge text-bg-warning text-dark">未読</span>
+                    <span class="badge rounded-pill badge-accent">未読</span>
                   {% else %}
-                    <span class="badge text-bg-secondary">既読</span>
+                    <span class="badge rounded-pill text-bg-light">既読</span>
                   {% endif %}
+
                   <div class="fw-semibold">
                     {{ n["message"] }}
                   </div>
                 </div>
 
-                <div class="small text-muted mt-1">
+                <div class="text-muted small mt-2">
                   作成: {{ n["created_at"] }}
                   {% if n["is_read"] == 1 and n["read_at"] %}
                     <span class="mx-1">/</span> 既読: {{ n["read_at"] }}
@@ -41,19 +45,19 @@
               <div class="text-end">
                 {% if n["is_read"] == 0 %}
                   <form method="post" action="{{ url_for('notifications_read', notif_id=n['id']) }}" class="m-0">
-                    <button class="btn btn-sm btn-primary" type="submit">既読にする</button>
+                    <button class="btn btn-accent btn-sm" type="submit">既読にする</button>
                   </form>
                 {% endif %}
               </div>
+
             </div>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <div class="alert alert-light border mb-0">
-        <span class="text-muted">通知はまだありません。</span>
-      </div>
+      <div class="text-muted">通知はまだありません。</div>
     {% endif %}
+
   </div>
 </div>
 

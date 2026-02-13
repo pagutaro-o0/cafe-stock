@@ -2,61 +2,72 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-  <div>
-    <h1 class="h4 m-0">ユーザー切替</h1>
-    <div class="text-muted small mt-1">今操作している人を選んでください</div>
-  </div>
-
+<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+  <h1 class="h4 m-0">ユーザー切替</h1>
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
 </div>
 
-<form method="post" action="{{ url_for('whoami_set') }}">
-  <div class="card shadow-sm">
-    <div class="list-group list-group-flush">
+<div class="card shadow-sm">
+  <div class="card-body">
+    <p class="text-muted mb-3">今操作している人を選んでください</p>
 
-      {% for u in users %}
-        {% set is_current = (current_user and (current_user["id"] == u["id"])) %}
-        <label class="list-group-item d-flex align-items-center gap-3 py-3"
-               style="cursor:pointer;">
+    <form method="post" action="{{ url_for('whoami_set') }}">
+      <div class="list-group">
 
-          <!-- アイコン -->
-          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-               style="width:44px;height:44px;background:#f1f3f5;font-weight:800;">
-            {{ (u["username"] or "?")[0] }}
-          </div>
+        {% for u in users %}
+          {% set selected = (current_user and (current_user["id"] == u["id"])) %}
 
-          <!-- 名前・役割 -->
-          <div class="flex-grow-1">
-            <div class="fw-semibold">{{ u["username"] }}</div>
-            <div class="text-muted small">
-              {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
+          <label class="list-group-item d-flex align-items-center gap-3 py-3 {% if selected %}active-user{% endif %}">
+            <input class="form-check-input m-0" type="radio" name="user_id" value="{{ u['id'] }}"
+                   {% if selected %}checked{% endif %}>
+
+            <!-- 左：アイコン -->
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 user-badge">
+              {{ (u["username"][:1]) }}
             </div>
-          </div>
 
-          <!-- role 表示（英語消すならバッジだけにする） -->
-          <span class="badge rounded-pill text-bg-light border">
-            {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
-          </span>
+            <!-- 中：名前/役割 -->
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ u["username"] }}</div>
+              <div class="text-muted small">
+                {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
+              </div>
+            </div>
 
-          <!-- ラジオ -->
-          <input class="form-check-input ms-2"
-                 type="radio"
-                 name="user_id"
-                 value="{{ u['id'] }}"
-                 {% if is_current %}checked{% endif %}>
+            <!-- 右：タグ -->
+            <div class="text-end">
+              <span class="badge badge-accent-soft">
+                {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
+              </span>
+            </div>
+          </label>
+        {% endfor %}
 
-        </label>
-      {% endfor %}
+      </div>
 
-    </div>
-
-    <div class="card-body d-flex justify-content-end gap-2">
-      <button type="submit" class="btn btn-primary">
-        このユーザーで操作する
-      </button>
-    </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-accent" type="submit">このユーザーで操作する</button>
+      </div>
+    </form>
   </div>
-</form>
+</div>
+
+<style>
+  /* whoami 専用：base.html の色トーンに合わせる */
+
+  .user-badge{
+    width: 44px; height: 44px;
+    background: #f2f4f3;
+    color: #1f2a25;
+    font-weight: 800;
+  }
+
+  /* 選択中の行：薄いグリーン背景＋枠 */
+  .active-user{
+    background: rgba(20, 86, 60, 0.08);
+    border-color: rgba(20, 86, 60, 0.18);
+  }
+  .active-user .text-muted{ color: #405049 !important; }
+</style>
 
 {% endblock %}

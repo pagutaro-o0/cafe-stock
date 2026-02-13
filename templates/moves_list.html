@@ -7,65 +7,117 @@
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
 </div>
 
-<div class="card shadow-sm">
-  <div class="card-body p-0">
-    {% if moves %}
-      <div class="table-responsive">
-        <table class="table table-sm table-striped align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="text-nowrap" style="width: 160px;">日時</th>
-              <th class="text-nowrap" style="width: 90px;">区分</th>
-              <th>品目</th>
-              <th class="text-end text-nowrap" style="width: 140px;">数量</th>
-              <th class="text-nowrap" style="width: 140px;">担当</th>
-              <th>メモ</th>
-            </tr>
-          </thead>
+<!-- ▼ スマホ：カード表示 -->
+<div class="d-md-none">
+  {% if moves %}
+    <div class="vstack gap-2">
+      {% for m in moves %}
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fw-semibold">{{ m["item_name"] }}</div>
+                <div class="text-muted small">{{ m["occurred_at"] }}</div>
+              </div>
 
-          <tbody>
-            {% for m in moves %}
-              <tr>
-                <td class="text-nowrap">
-                  <span class="text-muted small">{{ m["occurred_at"] }}</span>
-                </td>
+              <div class="text-end">
+                {% if m["move_type"] == "IN" %}
+                  <span class="badge badge-accent">入庫</span>
+                {% else %}
+                  <span class="badge text-bg-light border">出庫</span>
+                {% endif %}
+                <div class="mt-2 fw-bold">
+                  {% if m["move_type"] == "IN" %}+{% else %}-{% endif %}
+                  {{ m["qty"]|int if m["qty"] == (m["qty"]|int) else m["qty"] }}
+                  <span class="text-muted small ms-1">{{ m["item_unit"] }}</span>
+                </div>
+              </div>
+            </div>
 
-                <td class="text-nowrap">
-                  {% if m["move_type"] == "IN" %}
-  <span class="badge badge-soft">入庫</span>
-{% else %}
-  <span class="badge badge-soft">出庫</span>
-{% endif %}
-                </td>
+            <hr class="my-2">
 
-                <td>
-                  <div class="fw-semibold">{{ m["item_name"] }}</div>
-                  <div class="text-muted small">単位: {{ m["item_unit"] }}</div>
-                </td>
+            <div class="d-flex justify-content-between">
+              <div class="text-muted small">担当</div>
+              <div class="small">{{ m["user_name"] or "-" }}</div>
+            </div>
 
-                <td class="text-end text-nowrap">
-  {% if m["move_type"] == "IN" %}
-    <span class="fw-bold">+{{ m["qty"]|int if m["qty"] == (m["qty"]|int) else m["qty"] }}</span>
+            {% if m["note"] %}
+              <div class="mt-2">
+                <div class="text-muted small mb-1">メモ</div>
+                <div class="small">{{ m["note"] }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   {% else %}
-    <span class="fw-bold">-{{ m["qty"]|int if m["qty"] == (m["qty"]|int) else m["qty"] }}</span>
+    <div class="text-muted">履歴はまだありません。</div>
   {% endif %}
-  <span class="text-muted small ms-1">{{ m["item_unit"] }}</span>
-</td>
-                <td class="text-nowrap">
-                  {{ m["user_name"] or "-" }}
-                </td>
+</div>
 
-                <td class="text-muted" style="white-space: normal;">
-                  {{ m["note"] or "" }}
-                </td>
+<!-- ▼ PC：テーブル表示 -->
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+
+      {% if moves %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="text-nowrap" style="width: 160px;">日時</th>
+                <th class="text-nowrap" style="width: 90px;">区分</th>
+                <th>品目</th>
+                <th class="text-end text-nowrap" style="width: 140px;">数量</th>
+                <th class="text-nowrap" style="width: 140px;">担当</th>
+                <th>メモ</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <div class="p-3 text-muted">履歴はまだありません。</div>
-    {% endif %}
+            </thead>
+
+            <tbody>
+              {% for m in moves %}
+                <tr>
+                  <td class="text-nowrap"><span class="text-muted small">{{ m["occurred_at"] }}</span></td>
+
+                  <td class="text-nowrap">
+                    {% if m["move_type"] == "IN" %}
+                      <span class="badge badge-accent">入庫</span>
+                    {% else %}
+                      <span class="badge text-bg-light border">出庫</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    <div class="fw-semibold">{{ m["item_name"] }}</div>
+                    <div class="text-muted small">単位: {{ m["item_unit"] }}</div>
+                  </td>
+
+                  <td class="text-end text-nowrap">
+                    <span class="fw-bold">
+                      {% if m["move_type"] == "IN" %}+{% else %}-{% endif %}
+                      {{ m["qty"]|int if m["qty"] == (m["qty"]|int) else m["qty"] }}
+                    </span>
+                    <span class="text-muted small ms-1">{{ m["item_unit"] }}</span>
+                  </td>
+
+                  <td class="text-nowrap">{{ m["user_name"] or "-" }}</td>
+
+                  <td><span class="text-muted">{{ m["note"] or "" }}</span></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="p-3 border-top small text-muted">
+          最新50件を表示しています。
+        </div>
+      {% else %}
+        <div class="p-3 text-muted">履歴はまだありません。</div>
+      {% endif %}
+
+    </div>
   </div>
 </div>
 

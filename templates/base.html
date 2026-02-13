@@ -6,95 +6,230 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title or "cafe stock" }}</title>
 
+  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
+  
   <style>
-  /* まず全体のトーン */
-  body { background: #f6f7f9; }
+    :root{
+      --accent: #184a3a;        /* ダークグリーン */
+      --accent-2: #12372b;      /* さらに濃い */
+      --bg: #f6f7f8;
+      --card-border: rgba(0,0,0,.08);
+    }
 
-  /* アクセント色（ここだけ変えれば全体変わる） */
+    body { background: var(--bg); }
+
+    /* navbar */
+    .navbar-cafe{
+      background: #1f2326; /* 黒寄り */
+    }
+    .brand{
+      font-weight: 900;
+      letter-spacing: .2px;
+    }
+
+    /* “現在：〇〇” */
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:.4rem;
+      padding:.35rem .6rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      color:#fff;
+      font-weight: 800;
+      font-size: .9rem;
+      white-space: nowrap;
+    }
+
+    /* accent buttons */
+    .btn-accent{
+      --bs-btn-bg: var(--accent);
+      --bs-btn-border-color: var(--accent);
+      --bs-btn-hover-bg: var(--accent-2);
+      --bs-btn-hover-border-color: var(--accent-2);
+      --bs-btn-color: #fff;
+    }
+    .btn-outline-accent{
+      --bs-btn-color: var(--accent);
+      --bs-btn-border-color: var(--accent);
+      --bs-btn-hover-bg: var(--accent);
+      --bs-btn-hover-border-color: var(--accent);
+      --bs-btn-hover-color: #fff;
+    }
+
+    /* cards */
+    .card{
+      border: 1px solid var(--card-border);
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+      border-radius: 14px;
+    }
+
+    /* flash -> bootstrap alert 寄せ */
+    .flash{ margin: 12px 0; }
+    .flash.error{ background: #fff; border:1px solid rgba(220,53,69,.25); color:#842029; }
+    .flash.success{ background:#fff; border:1px solid rgba(25,135,84,.25); color:#0f5132; }
+
+    /* badge colors: 基本はグリーン/グレーに寄せる */
+    .badge-soft{
+      background: rgba(24,74,58,.12);
+      color: var(--accent);
+      border: 1px solid rgba(24,74,58,.18);
+      font-weight: 800;
+    }
+    .badge-soft-gray{
+      background: rgba(0,0,0,.06);
+      color: rgba(0,0,0,.65);
+      border: 1px solid rgba(0,0,0,.08);
+      font-weight: 800;
+    }
+    :root{
+  --accent:#0f3d2e;
+  --accent-hover:#0c3226;
+}
+
+.btn-accent{
+  background: var(--accent);
+  border-color: var(--accent);
+  color:#fff;
+}
+.btn-accent:hover{
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color:#fff;
+}
+
+.badge-soft{
+  background: rgba(15,61,46,.10);
+  color: var(--accent);
+  border: 1px solid rgba(15,61,46,.25);
+}
+/* ===== accent (dark green) ===== */
+:root{
+  --accent: #0f3d2e;     /* ダークグリーン */
+  --accent-2: #15513d;   /* hover用 */
+}
+
+.btn-accent{
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--accent);
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--accent-2);
+  --bs-btn-hover-border-color: var(--accent-2);
+  --bs-btn-focus-shadow-rgb: 15,61,46;
+  --bs-btn-active-bg: #0b2f24;
+  --bs-btn-active-border-color: #0b2f24;
+}
+
+.badge-accent{
+  background: rgba(15,61,46,.12);
+  color: var(--accent);
+  border: 1px solid rgba(15,61,46,.25);
+}
+
+.icon-btn{
+  border: 1px solid rgba(0,0,0,.15);
+}
+:root{
+  --accent:#0f3d2e;        /* ダークグリーン */
+  --accent-2:#0b2e23;
+}
+
+.btn-accent{
+  background: var(--accent);
+  border-color: var(--accent);
+  color:#fff;
+}
+.btn-accent:hover{
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color:#fff;
+}
+
+.badge-accent{
+  background: var(--accent);
+  color:#fff;
+}
+
   :root{
-    --brand: #111827;         /* メイン（黒っぽい） */
-    --brand-weak: #eef2f7;    /* 薄いグレー */
-    --text-muted: #6b7280;
+    --accent: #14563c;         /* ダークグリーン */
+    --accent-2: #0f3f2c;
+  }
+  .btn-accent{
+    --bs-btn-color:#fff;
+    --bs-btn-bg: var(--accent);
+    --bs-btn-border-color: var(--accent);
+    --bs-btn-hover-bg: var(--accent-2);
+    --bs-btn-hover-border-color: var(--accent-2);
+  }
+  .badge-accent{
+    background: var(--accent) !important;
+    color:#fff !important;
+  }
+  .badge-accent-soft{
+    background: rgba(20, 86, 60, 0.12) !important;
+    color: var(--accent) !important;
+    border: 1px solid rgba(20, 86, 60, 0.22);
   }
 
-  /* Bootstrapのprimaryを“黒”に寄せる */
-  .btn-primary{
-    background: var(--brand) !important;
-    border-color: var(--brand) !important;
-  }
-  .btn-primary:hover{
-    filter: brightness(0.9);
-  }
-
-  /* 危険/警告の色を使わない：全部グレー系に */
-  .btn-outline-secondary{ border-color:#cbd5e1; }
-  .btn-outline-secondary:hover{ background:#eef2f7; }
-
-  /* バッジもグレーに統一（入庫/出庫で色分けしない） */
-  .badge-soft{
-    background: var(--brand-weak);
-    color: #111827;
-    border: 1px solid #e5e7eb;
-    font-weight: 700;
-  }
-  .badge-soft.strong{
-    background: #111827;
-    color: #fff;
-    border-color: #111827;
-  }
-
-  /* “少ない”だけは同系色の薄いグレーで目立たせる（黄色禁止） */
-  .pill-low{
-    background: #e5e7eb;
-    color: #111827;
-    border: 1px solid #d1d5db;
-    font-weight: 700;
-    border-radius: 999px;
-    padding: 2px 10px;
-    display: inline-block;
-    font-size: 12px;
-  }
-
-  /* フラッシュも赤/緑をやめてグレー */
-  .alert{ border-radius: 12px; }
-  .alert-success, .alert-danger, .alert-warning, .alert-info{
-    background: #ffffff !important;
-    border: 1px solid #e5e7eb !important;
-    color: #111827 !important;
-  }
-</style>
+  </style>
 </head>
 
 <body>
-  <nav class="navbar navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('items_list') }}">☕ cafe stock</a>
 
-      <div class="d-flex align-items-center gap-2">
-        {% if current_user %}
-          <span class="badge text-bg-secondary">現在：{{ current_user["username"] }}</span>
-        {% endif %}
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-cafe sticky-top">
+    <div class="container-lg py-2">
 
-        <a class="btn btn-outline-light btn-sm" href="{{ url_for('notifications_list') }}">
-          通知{% if unread_notif_count %} ({{ unread_notif_count }}){% endif %}
-        </a>
+      <a class="navbar-brand brand" href="{{ url_for('items_list') }}">☕ cafe stock</a>
 
-        <a class="btn btn-outline-light btn-sm" href="{{ url_for('whoami') }}">切替</a>
+      <!-- Mobile toggle -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav"
+              aria-controls="topNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="topNav">
+        <!-- left spacer -->
+        <div class="me-auto"></div>
+
+        <!-- right -->
+        <div class="d-flex flex-column flex-lg-row gap-2 align-items-lg-center mt-3 mt-lg-0">
+
+          {% if current_user %}
+            <div class="chip">
+              <span>現在：</span><span>{{ current_user["username"] }}</span>
+            </div>
+          {% endif %}
+
+          <!-- 通知 -->
+          <a class="btn btn-outline-light btn-sm"
+             href="{{ url_for('notifications_list') }}">
+            通知
+            {% if unread_notif_count and unread_notif_count > 0 %}
+              <span class="badge text-bg-light ms-1">{{ unread_notif_count }}</span>
+            {% endif %}
+          </a>
+
+          <!-- 切替 -->
+          <a class="btn btn-outline-light btn-sm" href="{{ url_for('whoami') }}">切替</a>
+
+        </div>
       </div>
     </div>
   </nav>
 
-  <main class="container py-3" style="max-width: 980px;">
+  <main class="container-lg py-3">
+
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          {% if category == "error" %}
-            <div class="alert alert-danger py-2 mb-2">{{ message }}</div>
-          {% else %}
-            <div class="alert alert-success py-2 mb-2">{{ message }}</div>
-          {% endif %}
+          <!-- 既存の flash を活かしつつ見た目だけ整える -->
+          <div class="flash alert {% if category == 'error' %}alert-danger{% elif category == 'success' %}alert-success{% else %}alert-secondary{% endif %} mb-3">
+            {{ message }}
+          </div>
         {% endfor %}
       {% endif %}
     {% endwith %}
@@ -105,79 +240,3 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-<style>
-  body { background: #f6f7f9; }
-
-  /* ===== ダークグリーン（ここだけで色の統一が決まる） ===== */
-  :root{
-    --brand: #0f3d2e;         /* ダークグリーン */
-    --brand-dark: #0b2b20;    /* hover用（濃い） */
-    --brand-weak: #e8f1ee;    /* 薄い緑グレー */
-    --text-muted: #6b7280;
-  }
-
-  /* Bootstrapのprimaryをダークグリーンに寄せる */
-  .btn-primary{
-    background: var(--brand) !important;
-    border-color: var(--brand) !important;
-  }
-  .btn-primary:hover{
-    background: var(--brand-dark) !important;
-    border-color: var(--brand-dark) !important;
-  }
-
-  /* outline系（グレー寄り） */
-  .btn-outline-secondary{
-    border-color:#cbd5e1 !important;
-    color:#111827 !important;
-  }
-  .btn-outline-secondary:hover{
-    background:#eef2f7 !important;
-  }
-
-  /* バッジ：色分けしない（全部落ち着いたトーン） */
-  .badge-soft{
-    background: var(--brand-weak);
-    color: var(--brand);
-    border: 1px solid #d7e6e0;
-    font-weight: 800;
-  }
-  .badge-soft.strong{
-    background: var(--brand);
-    color: #fff;
-    border-color: var(--brand);
-  }
-
-  /* “少ない” だけは薄い緑グレーで（黄色禁止） */
-  .pill-low{
-    background: var(--brand-weak);
-    color: var(--brand);
-    border: 1px solid #d7e6e0;
-    font-weight: 800;
-    border-radius: 999px;
-    padding: 2px 10px;
-    display: inline-block;
-    font-size: 12px;
-  }
-
-  /* フラッシュ（赤緑やめる） */
-  .alert-success, .alert-danger, .alert-warning, .alert-info{
-    background: #fff !important;
-    border: 1px solid #e5e7eb !important;
-    color: #111827 !important;
-  }
-  :root{
-  --accent: #0f3d2e;         /* ダークグリーン */
-  --accent-2: #145a41;       /* hover用 */
-}
-
-.btn-primary{
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
-}
-.btn-primary:hover{
-  background: var(--accent-2) !important;
-  border-color: var(--accent-2) !important;
-}
-</style>
-

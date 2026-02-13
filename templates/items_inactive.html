@@ -1,49 +1,58 @@
-<!-- templates/items_inactive.html -->
 {% extends "base.html" %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
   <h1 class="h4 m-0">削除した品目</h1>
-  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">品目一覧へ</a>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">品目一覧へ</a>
+  </div>
 </div>
 
-{% if items %}
-  {% for it in items %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-          <!-- 左：品目情報 -->
-          <div style="min-width: 260px;">
-            <div class="fw-bold fs-5">{{ it["name"] }}</div>
-            <div class="text-muted small mt-1">
-              {{ it["category"] }} / 単位: {{ it["unit"] }}
-              {% if it["location_name"] %}
-                / 保管: {{ it["location_name"] }}
-              {% endif %}
+<div class="card shadow-sm">
+  <div class="card-body">
+
+    {% if items %}
+      <div class="vstack gap-2">
+        {% for it in items %}
+          <div class="border rounded-3 p-3 bg-white">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+
+              <!-- 左：品目情報 -->
+              <div class="me-auto" style="min-width:260px;">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <div class="fw-semibold">{{ it["name"] }}</div>
+                  <span class="badge rounded-pill text-bg-light">削除済み</span>
+                </div>
+
+                <div class="text-muted small mt-2">
+                  {{ "食材" if it["category"] == "ingredient" else "消耗品" }}
+                  <span class="mx-1">/</span> 単位: {{ it["unit"] }}
+                  {% if it["location_name"] %}
+                    <span class="mx-1">/</span> 保管: {{ it["location_name"] }}
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- 右：在庫 + 復元 -->
+              <div class="text-end">
+                <div class="fw-bold fs-5 text-nowrap">
+                  {{ "%.2f"|format(it["current_qty"])|replace(".00","") }} {{ it["unit"] }}
+                </div>
+
+                <form method="post" action="{{ url_for('item_restore', item_id=it['id']) }}" class="mt-2 m-0">
+                  <button class="btn btn-accent btn-sm" type="submit">復元する</button>
+                </form>
+              </div>
+
             </div>
           </div>
-
-          <!-- 右：在庫 + 復元 -->
-          <div class="text-end">
-            <div class="fs-4 fw-bold">
-              {{ "%.2f"|format(it["current_qty"])|replace(".00","") }}
-              <span class="text-muted fs-6">{{ it["unit"] }}</span>
-            </div>
-
-            <form method="post" action="{{ url_for('item_restore', item_id=it['id']) }}" class="mt-2">
-              <button class="btn btn-success btn-sm" type="submit">復元する</button>
-            </form>
-          </div>
-        </div>
+        {% endfor %}
       </div>
-    </div>
-  {% endfor %}
-{% else %}
-  <div class="card shadow-sm">
-    <div class="card-body text-muted">
-      削除した品目はありません。
-    </div>
+    {% else %}
+      <div class="text-muted">削除した品目はありません。</div>
+    {% endif %}
+
   </div>
-{% endif %}
+</div>
 
 {% endblock %}
