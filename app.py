@@ -1,53 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from db import get_db, close_db
+from db import get_db, close_db, init_db as db_init_db
 
 
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = "dev-secret-change-me"  # 本番は変更
+    app.config["SECRET_KEY"] = "dev-secret-change-me"
     app.teardown_appcontext(close_db)
 
-    # ----------
-    # DB Init (起動時に1回)
-    # ----------
-    def init_db():
-        db = get_db()
-
-        # sqliteのロック対策（効かなくてもOK）
-        try:
-            db.execute("PRAGMA busy_timeout = 5000")  # 5秒待つ
-            db.execute("PRAGMA journal_mode = WAL")   # 可能ならロック減る
-        except Exception:
-            pass
-
-        # notifications テーブル
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notifications (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              item_id INTEGER NOT NULL,
-              type TEXT NOT NULL,
-              message TEXT NOT NULL,
-              is_read INTEGER NOT NULL DEFAULT 0,
-              created_by INTEGER,
-              created_at TEXT NOT NULL,
-              read_at TEXT
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_notifications_item_unread
-            ON notifications(item_id, type, is_read)
-            """
-        )
-        db.commit()
-
-    # ----------
-    # Helpers
-    # ----------
+    # ---------- Helpers ----------
     def get_or_create_owner_id() -> int:
-        """users に owner がいればその id を返す。いなければ作って返す。"""
         db = get_db()
         owner = db.execute(
             "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
@@ -63,7 +24,6 @@ def create_app():
         return int(cur.lastrowid)
 
     def ensure_demo_staff():
-        """デモ用に staff を2人作る（いなければ）※重複は作らない"""
         db = get_db()
         for name in ("東", "大橋"):
             exists = db.execute(
@@ -78,10 +38,6 @@ def create_app():
         db.commit()
 
     def get_current_user():
-        """
-        セッションの user_id を返す（無ければ owner にする）
-        Row: {id, username, role}
-        """
         db = get_db()
         uid = session.get("user_id")
 
@@ -110,10 +66,6 @@ def create_app():
         reorder_point: float,
         created_by: int,
     ) -> None:
-        """
-        current_qty < reorder_point のとき未読通知を1件だけ作る（重複しない）。
-        current_qty >= reorder_point に戻ったら、未読のLOW_STOCKを既読にする（自動解決）。
-        """
         if reorder_point is None or float(reorder_point) <= 0:
             return
 
@@ -147,7 +99,7 @@ def create_app():
                 (item_id,),
             )
 
-    # ★全テンプレで current_user / unread_notif_count を使える
+    # ---------- inject globals ----------
     @app.context_processor
     def inject_globals():
         db = get_db()
@@ -165,20 +117,17 @@ def create_app():
             "unread_notif_count": unread_count,
         }
 
-    # 起動時初期化
+    # ---------- 起動時初期化（ここだけ） ----------
     with app.app_context():
-        init_db()
+        db_init_db()           # ← db.py の init_db を呼ぶ
         get_or_create_owner_id()
         ensure_demo_staff()
 
-    # ----------
-    # Routes
-    # ----------
+    # ---------- Routes ----------
     @app.get("/")
     def home():
         return redirect(url_for("items_list"))
 
-    # ユーザー切替（一覧）
     @app.get("/whoami")
     def whoami():
         db = get_db()
@@ -192,7 +141,6 @@ def create_app():
         ).fetchall()
         return render_template("whoami.html", users=users)
 
-    # ユーザー切替（設定）
     @app.post("/whoami")
     def whoami_set():
         uid_raw = (request.form.get("user_id") or "").strip()
@@ -216,7 +164,6 @@ def create_app():
         flash(f"現在のユーザーを「{u['username']}」に切り替えました。", "success")
         return redirect(url_for("items_list"))
 
-    # 通知一覧（最新50件）
     @app.get("/notifications")
     def notifications_list():
         db = get_db()
@@ -230,7 +177,6 @@ def create_app():
         ).fetchall()
         return render_template("notifications_list.html", notifications=rows)
 
-    # 通知を既読にする
     @app.post("/notifications/<int:notif_id>/read")
     def notifications_read(notif_id: int):
         db = get_db()
@@ -245,7 +191,6 @@ def create_app():
         db.commit()
         return redirect(url_for("notifications_list"))
 
-    # 品目一覧（有効のみ）
     @app.get("/items")
     def items_list():
         db = get_db()
@@ -265,7 +210,6 @@ def create_app():
         ).fetchall()
         return render_template("items_list.html", items=rows)
 
-    # 削除した品目一覧（店主のみ）
     @app.get("/items/inactive")
     def items_inactive():
         current = get_current_user()
@@ -290,7 +234,6 @@ def create_app():
         ).fetchall()
         return render_template("items_inactive.html", items=rows)
 
-    # 復元（店主のみ）
     @app.post("/items/<int:item_id>/restore")
     def item_restore(item_id: int):
         current = get_current_user()
@@ -321,135 +264,29 @@ def create_app():
         flash(f"「{item['name']}」を復元しました。", "success")
         return redirect(url_for("items_inactive"))
 
-    # 品目追加フォーム（店主のみ）
-    @app.get("/items/new")
-    def items_new():
-        current = get_current_user()
-        if current["role"] != "owner":
-            flash("品目の追加は店主のみできます。", "error")
-            return redirect(url_for("items_list"))
-
+    @app.get("/moves")
+    def moves_list():
         db = get_db()
-        locations = db.execute(
-            "SELECT id, name FROM storage_locations ORDER BY name COLLATE NOCASE ASC"
+        rows = db.execute(
+            """
+            SELECT
+              sm.id,
+              sm.occurred_at,
+              sm.move_type,
+              sm.qty,
+              sm.note,
+              i.name AS item_name,
+              i.unit AS item_unit,
+              u.username AS user_name
+            FROM stock_moves sm
+            JOIN items i ON i.id = sm.item_id
+            JOIN users u ON u.id = sm.performed_by
+            ORDER BY sm.occurred_at DESC, sm.id DESC
+            LIMIT 50
+            """
         ).fetchall()
-        return render_template("items_new.html", locations=locations)
+        return render_template("moves_list.html", moves=rows)
 
-    # 品目登録（POST）（店主のみ）
-    @app.post("/items")
-    def items_create():
-        current = get_current_user()
-        if current["role"] != "owner":
-            flash("品目の追加は店主のみできます。", "error")
-            return redirect(url_for("items_list"))
-
-        name = (request.form.get("name") or "").strip()
-        category = (request.form.get("category") or "ingredient").strip()
-        unit = (request.form.get("unit") or "").strip()
-        reorder_point_raw = (request.form.get("reorder_point") or "0").strip()
-        track_lots = 1 if (request.form.get("track_lots") == "1") else 0
-        default_location_id_raw = (request.form.get("default_location_id") or "").strip()
-
-        if not name:
-            flash("品目名を入力してください。", "error")
-            return redirect(url_for("items_new"))
-        if category not in ("ingredient", "consumable"):
-            flash("カテゴリが不正です。", "error")
-            return redirect(url_for("items_new"))
-        if not unit:
-            flash("単位（g/L/箱など）を入力してください。", "error")
-            return redirect(url_for("items_new"))
-
-        try:
-            reorder_point = float(reorder_point_raw)
-            if reorder_point < 0:
-                raise ValueError
-        except ValueError:
-            flash("目安は 0 以上の数値で入力してください。", "error")
-            return redirect(url_for("items_new"))
-
-        default_location_id = None
-        if default_location_id_raw:
-            try:
-                default_location_id = int(default_location_id_raw)
-            except ValueError:
-                flash("保管場所が不正です。", "error")
-                return redirect(url_for("items_new"))
-
-        db = get_db()
-        dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
-        if dup:
-            flash("同じ品目名がすでに存在します。", "error")
-            return redirect(url_for("items_new"))
-
-        created_by = int(current["id"])
-
-        try:
-            cur = db.execute(
-                """
-                INSERT INTO items (
-                  name, category, unit, reorder_point, track_lots, is_active,
-                  default_location_id, created_by, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                """,
-                (name, category, unit, reorder_point, track_lots, default_location_id, created_by),
-            )
-            item_id = cur.lastrowid
-
-            db.execute(
-                "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
-                (item_id,),
-            )
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            flash(f"登録に失敗しました: {e}", "error")
-            return redirect(url_for("items_new"))
-
-        flash("品目を登録しました。", "success")
-        return redirect(url_for("items_list"))
-
-    # 論理削除（2段階確認 / 店主のみ）
-    @app.post("/items/<int:item_id>/delete")
-    def item_delete(item_id: int):
-        current = get_current_user()
-        if current["role"] != "owner":
-            flash("削除は店主のみできます。", "error")
-            return redirect(url_for("items_list"))
-
-        step = (request.form.get("step") or "1").strip()
-        if step == "1":
-            return redirect(url_for("items_list", confirm=item_id))
-
-        db = get_db()
-        try:
-            item = db.execute(
-                "SELECT id, name, is_active FROM items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-
-            if item is None:
-                flash("品目が見つかりません。", "error")
-                return redirect(url_for("items_list"))
-
-            if int(item["is_active"]) == 0:
-                flash("この品目はすでに削除済みです。", "error")
-                return redirect(url_for("items_list"))
-
-            db.execute(
-                "UPDATE items SET is_active = 0, updated_at = datetime('now','localtime') WHERE id = ?",
-                (item_id,),
-            )
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            flash(f"削除に失敗しました: {e}", "error")
-            return redirect(url_for("items_list"))
-
-        flash(f"「{item['name']}」を削除しました。", "success")
-        return redirect(url_for("items_list"))
-
-    # 在庫増減（全員）※クイックボタン専用
     @app.post("/items/<int:item_id>/adjust")
     def item_adjust(item_id: int):
         current = get_current_user()
@@ -460,7 +297,7 @@ def create_app():
             flash("操作が不正です。", "error")
             return redirect(url_for("items_list"))
 
-        qty = int(quick.replace("+", "").replace("-", ""))  # 1 or 5
+        qty = int(quick.replace("+", "").replace("-", ""))
         move_type = "IN" if quick.startswith("+") else "OUT"
         delta = qty if move_type == "IN" else -qty
         note = None
@@ -492,7 +329,6 @@ def create_app():
                 flash("在庫がマイナスになるため、この操作はできません。", "error")
                 return redirect(url_for("items_list"))
 
-            # 履歴ログ
             db.execute(
                 """
                 INSERT INTO stock_moves (move_type, item_id, qty, performed_by, note, occurred_at, created_at)
@@ -501,7 +337,6 @@ def create_app():
                 (move_type, item_id, qty, performed_by, note),
             )
 
-            # 在庫更新（なければ作る）
             if row is None:
                 db.execute(
                     """
@@ -520,7 +355,6 @@ def create_app():
                     (new_qty, item_id),
                 )
 
-            # 通知（LOW_STOCK）
             upsert_low_stock_notification(
                 db=db,
                 item_id=int(item["id"]),
@@ -540,36 +374,11 @@ def create_app():
         flash("在庫を更新しました。", "success")
         return redirect(url_for("items_list"))
 
-    # 履歴（最新50件）
-    @app.get("/moves")
-    def moves_list():
-        db = get_db()
-        rows = db.execute(
-            """
-            SELECT
-              sm.id,
-              sm.occurred_at,
-              sm.move_type,
-              sm.qty,
-              sm.note,
-              i.name AS item_name,
-              i.unit AS item_unit,
-              u.username AS user_name
-            FROM stock_moves sm
-            JOIN items i ON i.id = sm.item_id
-            JOIN users u ON u.id = sm.performed_by
-            ORDER BY sm.occurred_at DESC, sm.id DESC
-            LIMIT 50
-            """
-        ).fetchall()
-        return render_template("moves_list.html", moves=rows)
-
     return app
 
-app = create_app()
-
-import os
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5001"))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    import os
+    app = create_app()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
