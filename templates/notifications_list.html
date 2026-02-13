@@ -1,0 +1,60 @@
+<!-- templates/notifications_list.html -->
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">通知</h1>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <p class="text-muted mb-3">
+      在庫が「目安」を下回ったときに自動で出ます（同じ品目は未読1件だけ）。
+    </p>
+
+    {% if notifications %}
+      <div class="list-group">
+        {% for n in notifications %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  {% if n["is_read"] == 0 %}
+                    <span class="badge text-bg-warning text-dark">未読</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">既読</span>
+                  {% endif %}
+                  <div class="fw-semibold">
+                    {{ n["message"] }}
+                  </div>
+                </div>
+
+                <div class="small text-muted mt-1">
+                  作成: {{ n["created_at"] }}
+                  {% if n["is_read"] == 1 and n["read_at"] %}
+                    <span class="mx-1">/</span> 既読: {{ n["read_at"] }}
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="text-end">
+                {% if n["is_read"] == 0 %}
+                  <form method="post" action="{{ url_for('notifications_read', notif_id=n['id']) }}" class="m-0">
+                    <button class="btn btn-sm btn-primary" type="submit">既読にする</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert alert-light border mb-0">
+        <span class="text-muted">通知はまだありません。</span>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

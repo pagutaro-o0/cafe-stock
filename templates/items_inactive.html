@@ -1,0 +1,49 @@
+<!-- templates/items_inactive.html -->
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h1 class="h4 m-0">削除した品目</h1>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">品目一覧へ</a>
+</div>
+
+{% if items %}
+  {% for it in items %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+          <!-- 左：品目情報 -->
+          <div style="min-width: 260px;">
+            <div class="fw-bold fs-5">{{ it["name"] }}</div>
+            <div class="text-muted small mt-1">
+              {{ it["category"] }} / 単位: {{ it["unit"] }}
+              {% if it["location_name"] %}
+                / 保管: {{ it["location_name"] }}
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- 右：在庫 + 復元 -->
+          <div class="text-end">
+            <div class="fs-4 fw-bold">
+              {{ "%.2f"|format(it["current_qty"])|replace(".00","") }}
+              <span class="text-muted fs-6">{{ it["unit"] }}</span>
+            </div>
+
+            <form method="post" action="{{ url_for('item_restore', item_id=it['id']) }}" class="mt-2">
+              <button class="btn btn-success btn-sm" type="submit">復元する</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-muted">
+      削除した品目はありません。
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

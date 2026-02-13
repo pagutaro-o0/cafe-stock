@@ -1,0 +1,62 @@
+<!-- templates/whoami.html -->
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 m-0">ユーザー切替</h1>
+    <div class="text-muted small mt-1">今操作している人を選んでください</div>
+  </div>
+
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('items_list') }}">戻る</a>
+</div>
+
+<form method="post" action="{{ url_for('whoami_set') }}">
+  <div class="card shadow-sm">
+    <div class="list-group list-group-flush">
+
+      {% for u in users %}
+        {% set is_current = (current_user and (current_user["id"] == u["id"])) %}
+        <label class="list-group-item d-flex align-items-center gap-3 py-3"
+               style="cursor:pointer;">
+
+          <!-- アイコン -->
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;background:#f1f3f5;font-weight:800;">
+            {{ (u["username"] or "?")[0] }}
+          </div>
+
+          <!-- 名前・役割 -->
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ u["username"] }}</div>
+            <div class="text-muted small">
+              {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
+            </div>
+          </div>
+
+          <!-- role 表示（英語消すならバッジだけにする） -->
+          <span class="badge rounded-pill text-bg-light border">
+            {% if u["role"] == "owner" %}店主{% else %}スタッフ{% endif %}
+          </span>
+
+          <!-- ラジオ -->
+          <input class="form-check-input ms-2"
+                 type="radio"
+                 name="user_id"
+                 value="{{ u['id'] }}"
+                 {% if is_current %}checked{% endif %}>
+
+        </label>
+      {% endfor %}
+
+    </div>
+
+    <div class="card-body d-flex justify-content-end gap-2">
+      <button type="submit" class="btn btn-primary">
+        このユーザーで操作する
+      </button>
+    </div>
+  </div>
+</form>
+
+{% endblock %}
