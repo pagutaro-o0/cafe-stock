@@ -209,6 +209,95 @@ def create_app():
             """
         ).fetchall()
         return render_template("items_list.html", items=rows)
+    # 品目追加フォーム（店主のみ）
+@app.get("/items/new", endpoint="items_new")
+def items_new():
+    current = get_current_user()
+    if current["role"] != "owner":
+        flash("品目の追加は店主のみできます。", "error")
+        return redirect(url_for("items_list"))
+
+    db = get_db()
+    locations = db.execute(
+        "SELECT id, name FROM storage_locations ORDER BY name COLLATE NOCASE ASC"
+    ).fetchall()
+    return render_template("items_new.html", locations=locations)
+# 品目登録（POST）（店主のみ）
+@app.post("/items", endpoint="items_create")
+def items_create():
+    current = get_current_user()
+    if current["role"] != "owner":
+        flash("品目の追加は店主のみできます。", "error")
+        return redirect(url_for("items_list"))
+
+    name = (request.form.get("name") or "").strip()
+    category = (request.form.get("category") or "ingredient").strip()
+    unit = (request.form.get("unit") or "").strip()
+    reorder_point_raw = (request.form.get("reorder_point") or "0").strip()
+    default_location_id_raw = (request.form.get("default_location_id") or "").strip()
+
+    if not name:
+        flash("品目名を入力してください。", "error")
+        return redirect(url_for("items_new"))
+    if category not in ("ingredient", "consumable"):
+        flash("カテゴリが不正です。", "error")
+        return redirect(url_for("items_new"))
+    if not unit:
+        flash("単位を入力してください。", "error")
+        return redirect(url_for("items_new"))
+
+    try:
+        reorder_point = float(reorder_point_raw)
+        if reorder_point < 0:
+            raise ValueError
+    except ValueError:
+        flash("目安は 0 以上の数値で入力してください。", "error")
+        return redirect(url_for("items_new"))
+
+    default_location_id = None
+    if default_location_id_raw:
+        try:
+            default_location_id = int(default_location_id_raw)
+        except ValueError:
+            flash("保管場所が不正です。", "error")
+            return redirect(url_for("items_new"))
+
+    db = get_db()
+
+    # 同名チェック
+    dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
+    if dup:
+        flash("同じ品目名がすでに存在します。", "error")
+        return redirect(url_for("items_new"))
+
+    created_by = int(current["id"])
+
+    try:
+        cur = db.execute(
+            """
+            INSERT INTO items (
+              name, category, unit, reorder_point, track_lots, is_active,
+              default_location_id, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 0, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+            """,
+            (name, category, unit, reorder_point, default_location_id, created_by),
+        )
+        item_id = cur.lastrowid
+
+        # 初期在庫
+        db.execute(
+            "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
+            (item_id,),
+        )
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        flash(f"登録に失敗しました: {e}", "error")
+        return redirect(url_for("items_new"))
+
+    flash("品目を登録しました。", "success")
+    return redirect(url_for("items_list"))
 
     @app.get("/items/inactive")
     def items_inactive():
