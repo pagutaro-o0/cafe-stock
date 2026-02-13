@@ -119,7 +119,7 @@ def create_app():
 
     # ---------- 起動時初期化（ここだけ） ----------
     with app.app_context():
-        db_init_db()           # ← db.py の init_db を呼ぶ
+        db_init_db()
         get_or_create_owner_id()
         ensure_demo_staff()
 
@@ -128,6 +128,7 @@ def create_app():
     def home():
         return redirect(url_for("items_list"))
 
+    # ユーザー切替（一覧）
     @app.get("/whoami")
     def whoami():
         db = get_db()
@@ -141,6 +142,7 @@ def create_app():
         ).fetchall()
         return render_template("whoami.html", users=users)
 
+    # ユーザー切替（設定）
     @app.post("/whoami")
     def whoami_set():
         uid_raw = (request.form.get("user_id") or "").strip()
@@ -164,6 +166,7 @@ def create_app():
         flash(f"現在のユーザーを「{u['username']}」に切り替えました。", "success")
         return redirect(url_for("items_list"))
 
+    # 通知一覧
     @app.get("/notifications")
     def notifications_list():
         db = get_db()
@@ -177,6 +180,7 @@ def create_app():
         ).fetchall()
         return render_template("notifications_list.html", notifications=rows)
 
+    # 通知を既読にする
     @app.post("/notifications/<int:notif_id>/read")
     def notifications_read(notif_id: int):
         db = get_db()
@@ -191,6 +195,7 @@ def create_app():
         db.commit()
         return redirect(url_for("notifications_list"))
 
+    # 品目一覧
     @app.get("/items")
     def items_list():
         db = get_db()
@@ -209,96 +214,97 @@ def create_app():
             """
         ).fetchall()
         return render_template("items_list.html", items=rows)
+
     # 品目追加フォーム（店主のみ）
-@app.get("/items/new", endpoint="items_new")
-def items_new():
-    current = get_current_user()
-    if current["role"] != "owner":
-        flash("品目の追加は店主のみできます。", "error")
-        return redirect(url_for("items_list"))
+    @app.get("/items/new")
+    def items_new():
+        current = get_current_user()
+        if current["role"] != "owner":
+            flash("品目の追加は店主のみできます。", "error")
+            return redirect(url_for("items_list"))
 
-    db = get_db()
-    locations = db.execute(
-        "SELECT id, name FROM storage_locations ORDER BY name COLLATE NOCASE ASC"
-    ).fetchall()
-    return render_template("items_new.html", locations=locations)
-# 品目登録（POST）（店主のみ）
-@app.post("/items", endpoint="items_create")
-def items_create():
-    current = get_current_user()
-    if current["role"] != "owner":
-        flash("品目の追加は店主のみできます。", "error")
-        return redirect(url_for("items_list"))
+        db = get_db()
+        locations = db.execute(
+            "SELECT id, name FROM storage_locations ORDER BY name COLLATE NOCASE ASC"
+        ).fetchall()
+        return render_template("items_new.html", locations=locations)
 
-    name = (request.form.get("name") or "").strip()
-    category = (request.form.get("category") or "ingredient").strip()
-    unit = (request.form.get("unit") or "").strip()
-    reorder_point_raw = (request.form.get("reorder_point") or "0").strip()
-    default_location_id_raw = (request.form.get("default_location_id") or "").strip()
+    # 品目登録（POST）（店主のみ）
+    @app.post("/items")
+    def items_create():
+        current = get_current_user()
+        if current["role"] != "owner":
+            flash("品目の追加は店主のみできます。", "error")
+            return redirect(url_for("items_list"))
 
-    if not name:
-        flash("品目名を入力してください。", "error")
-        return redirect(url_for("items_new"))
-    if category not in ("ingredient", "consumable"):
-        flash("カテゴリが不正です。", "error")
-        return redirect(url_for("items_new"))
-    if not unit:
-        flash("単位を入力してください。", "error")
-        return redirect(url_for("items_new"))
+        name = (request.form.get("name") or "").strip()
+        category = (request.form.get("category") or "ingredient").strip()
+        unit = (request.form.get("unit") or "").strip()
+        reorder_point_raw = (request.form.get("reorder_point") or "0").strip()
+        default_location_id_raw = (request.form.get("default_location_id") or "").strip()
 
-    try:
-        reorder_point = float(reorder_point_raw)
-        if reorder_point < 0:
-            raise ValueError
-    except ValueError:
-        flash("目安は 0 以上の数値で入力してください。", "error")
-        return redirect(url_for("items_new"))
-
-    default_location_id = None
-    if default_location_id_raw:
-        try:
-            default_location_id = int(default_location_id_raw)
-        except ValueError:
-            flash("保管場所が不正です。", "error")
+        if not name:
+            flash("品目名を入力してください。", "error")
+            return redirect(url_for("items_new"))
+        if category not in ("ingredient", "consumable"):
+            flash("カテゴリが不正です。", "error")
+            return redirect(url_for("items_new"))
+        if not unit:
+            flash("単位を入力してください。", "error")
             return redirect(url_for("items_new"))
 
-    db = get_db()
+        try:
+            reorder_point = float(reorder_point_raw)
+            if reorder_point < 0:
+                raise ValueError
+        except ValueError:
+            flash("目安は 0 以上の数値で入力してください。", "error")
+            return redirect(url_for("items_new"))
 
-    # 同名チェック
-    dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
-    if dup:
-        flash("同じ品目名がすでに存在します。", "error")
-        return redirect(url_for("items_new"))
+        default_location_id = None
+        if default_location_id_raw:
+            try:
+                default_location_id = int(default_location_id_raw)
+            except ValueError:
+                flash("保管場所が不正です。", "error")
+                return redirect(url_for("items_new"))
 
-    created_by = int(current["id"])
+        db = get_db()
 
-    try:
-        cur = db.execute(
-            """
-            INSERT INTO items (
-              name, category, unit, reorder_point, track_lots, is_active,
-              default_location_id, created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 0, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-            """,
-            (name, category, unit, reorder_point, default_location_id, created_by),
-        )
-        item_id = cur.lastrowid
+        dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
+        if dup:
+            flash("同じ品目名がすでに存在します。", "error")
+            return redirect(url_for("items_new"))
 
-        # 初期在庫
-        db.execute(
-            "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
-            (item_id,),
-        )
+        created_by = int(current["id"])
 
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        flash(f"登録に失敗しました: {e}", "error")
-        return redirect(url_for("items_new"))
+        try:
+            cur = db.execute(
+                """
+                INSERT INTO items (
+                  name, category, unit, reorder_point, track_lots, is_active,
+                  default_location_id, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 0, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                """,
+                (name, category, unit, reorder_point, default_location_id, created_by),
+            )
+            item_id = cur.lastrowid
 
-    flash("品目を登録しました。", "success")
-    return redirect(url_for("items_list"))
+            db.execute(
+                "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
+                (item_id,),
+            )
 
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            flash(f"登録に失敗しました: {e}", "error")
+            return redirect(url_for("items_new"))
+
+        flash("品目を登録しました。", "success")
+        return redirect(url_for("items_list"))
+
+    # 削除した品目一覧（店主のみ）
     @app.get("/items/inactive")
     def items_inactive():
         current = get_current_user()
@@ -323,6 +329,7 @@ def items_create():
         ).fetchall()
         return render_template("items_inactive.html", items=rows)
 
+    # 復元（店主のみ）
     @app.post("/items/<int:item_id>/restore")
     def item_restore(item_id: int):
         current = get_current_user()
@@ -353,6 +360,7 @@ def items_create():
         flash(f"「{item['name']}」を復元しました。", "success")
         return redirect(url_for("items_inactive"))
 
+    # 履歴
     @app.get("/moves")
     def moves_list():
         db = get_db()
@@ -376,6 +384,7 @@ def items_create():
         ).fetchall()
         return render_template("moves_list.html", moves=rows)
 
+    # 在庫増減（クイック）
     @app.post("/items/<int:item_id>/adjust")
     def item_adjust(item_id: int):
         current = get_current_user()
@@ -466,8 +475,13 @@ def items_create():
     return app
 
 
+# ★ gunicorn / Render 用：importされたときに app が存在するようにする
+app = create_app()
+
+
+# ローカル実行用
 if __name__ == "__main__":
     import os
-    
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
