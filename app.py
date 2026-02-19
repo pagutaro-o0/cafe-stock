@@ -12,21 +12,19 @@ def create_app():
     # Helpers
     # =========================
     def get_or_create_owner_id() -> int:
-    # SELECT は execute() 経由で
         owner = execute(
         "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
     ).fetchone()
     if owner is not None:
-        return int(owner["id"] if isinstance(owner, dict) else owner["id"])
+        # psycopg(dict_row)でもsqlite(Row)でもOKにする
+        return int(owner["id"])
 
-    # INSERT は insert_returning_id() を使う（SQLite/Postgres両対応）
     owner_id = insert_returning_id(
         "INSERT INTO users (username, role) VALUES (?, ?)",
         ("吉田", "owner"),
     )
     commit()
     return int(owner_id)
-
      
 
     def ensure_demo_staff():
