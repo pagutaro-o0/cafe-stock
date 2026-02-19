@@ -1,6 +1,6 @@
 # app.py
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from db import get_db, close_db, init_db as db_init_db
+from db import get_db, close_db, init_db as db_init_db, execute, insert_returning_id, commit
 
 
 def create_app():
@@ -12,33 +12,35 @@ def create_app():
     # Helpers
     # =========================
     def get_or_create_owner_id() -> int:
-        db = get_db()
-        owner = db.execute(
-            "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
-        ).fetchone()
-        if owner is not None:
-            return int(owner["id"])
+    # SELECT は execute() 経由で
+        owner = execute(
+        "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
+    ).fetchone()
+    if owner is not None:
+        return int(owner["id"] if isinstance(owner, dict) else owner["id"])
 
-        cur = db.execute(
-            "INSERT INTO users (username, role) VALUES (?, ?)",
-            ("吉田", "owner"),
-        )
-        db.commit()
-        return int(cur.lastrowid)
+    # INSERT は insert_returning_id() を使う（SQLite/Postgres両対応）
+    owner_id = insert_returning_id(
+        "INSERT INTO users (username, role) VALUES (?, ?)",
+        ("吉田", "owner"),
+    )
+    commit()
+    return int(owner_id)
+
+     
 
     def ensure_demo_staff():
-        db = get_db()
         for name in ("東", "大橋"):
-            exists = db.execute(
-                "SELECT 1 FROM users WHERE username = ? AND role='staff' LIMIT 1",
-                (name,),
-            ).fetchone()
-            if not exists:
-                db.execute(
-                    "INSERT INTO users (username, role) VALUES (?, ?)",
-                    (name, "staff"),
-                )
-        db.commit()
+            exists = execute(
+            "SELECT 1 FROM users WHERE username = ? AND role='staff' LIMIT 1",
+            (name,),
+        ).fetchone()
+        if not exists:
+            execute(
+                "INSERT INTO users (username, role) VALUES (?, ?)",
+                (name, "staff"),
+            )
+    commit()
 
     def get_current_user():
         db = get_db()

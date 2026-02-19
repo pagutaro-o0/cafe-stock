@@ -52,7 +52,37 @@ def _execute(db, sql: str, params=()):
     if kind == "postgres":
         sql = sql.replace("?", "%s")
     return db.execute(sql, params)
+def execute(sql: str, params=()):
+    """
+    app.py から使う用。
+    SQLは常に「?」で書いてOK。Postgresのときだけ %s に変換して流す。
+    """
+    db = get_db()
+    return _execute(db, sql, params)
+def insert_returning_id(sql: str, params=()):
+    """
+    INSERTしてidが欲しい時用。SQLite / Postgres 両対応。
+    - Postgres: RETURNING id を使う
+    - SQLite: lastrowid
+    """
+    db = get_db()
+    kind = getattr(g, "db_kind", "sqlite")
 
+    if kind == "postgres":
+        # すでに RETURNING id が付いてなければ付ける
+        if "returning" not in sql.lower():
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+        cur = _execute(db, sql, params)
+        row = cur.fetchone()
+        return int(row["id"]) if row and "id" in row else None
+
+    # SQLite
+    cur = db.execute(sql, params)
+    return int(cur.lastrowid)
+
+def commit():
+    db = get_db()
+    db.commit()
 
 def init_db():
     db = get_db()
