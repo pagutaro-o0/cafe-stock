@@ -1,3 +1,4 @@
+# app.py
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from db import get_db, close_db, init_db as db_init_db
 
@@ -7,7 +8,9 @@ def create_app():
     app.config["SECRET_KEY"] = "dev-secret-change-me"
     app.teardown_appcontext(close_db)
 
-    # ---------- Helpers ----------
+    # =========================
+    # Helpers
+    # =========================
     def get_or_create_owner_id() -> int:
         db = get_db()
         owner = db.execute(
@@ -99,7 +102,9 @@ def create_app():
                 (item_id,),
             )
 
-    # ---------- inject globals ----------
+    # =========================
+    # inject globals (base.html用)
+    # =========================
     @app.context_processor
     def inject_globals():
         db = get_db()
@@ -117,18 +122,22 @@ def create_app():
             "unread_notif_count": unread_count,
         }
 
-    # ---------- 起動時初期化（ここだけ） ----------
+    # =========================
+    # 起動時初期化（ここだけ）
+    # =========================
     with app.app_context():
         db_init_db()
         get_or_create_owner_id()
         ensure_demo_staff()
 
-    # ---------- Routes ----------
+    # =========================
+    # Routes
+    # =========================
     @app.get("/")
     def home():
         return redirect(url_for("items_list"))
 
-    # ユーザー切替（一覧）
+    # ---- ユーザー切替（一覧）
     @app.get("/whoami")
     def whoami():
         db = get_db()
@@ -142,7 +151,7 @@ def create_app():
         ).fetchall()
         return render_template("whoami.html", users=users)
 
-    # ユーザー切替（設定）
+    # ---- ユーザー切替（設定）
     @app.post("/whoami")
     def whoami_set():
         uid_raw = (request.form.get("user_id") or "").strip()
@@ -166,7 +175,7 @@ def create_app():
         flash(f"現在のユーザーを「{u['username']}」に切り替えました。", "success")
         return redirect(url_for("items_list"))
 
-    # 通知一覧
+    # ---- 通知一覧
     @app.get("/notifications")
     def notifications_list():
         db = get_db()
@@ -180,7 +189,7 @@ def create_app():
         ).fetchall()
         return render_template("notifications_list.html", notifications=rows)
 
-    # 通知を既読にする
+    # ---- 通知を既読
     @app.post("/notifications/<int:notif_id>/read")
     def notifications_read(notif_id: int):
         db = get_db()
@@ -195,7 +204,7 @@ def create_app():
         db.commit()
         return redirect(url_for("notifications_list"))
 
-    # 品目一覧
+    # ---- 品目一覧（有効）
     @app.get("/items")
     def items_list():
         db = get_db()
@@ -215,7 +224,7 @@ def create_app():
         ).fetchall()
         return render_template("items_list.html", items=rows)
 
-    # 品目追加フォーム（店主のみ）
+    # ---- 品目追加フォーム（店主のみ）
     @app.get("/items/new")
     def items_new():
         current = get_current_user()
@@ -229,7 +238,7 @@ def create_app():
         ).fetchall()
         return render_template("items_new.html", locations=locations)
 
-    # 品目登録（POST）（店主のみ）
+    # ---- 品目登録（POST）（店主のみ）
     @app.post("/items")
     def items_create():
         current = get_current_user()
@@ -242,6 +251,7 @@ def create_app():
         unit = (request.form.get("unit") or "").strip()
         reorder_point_raw = (request.form.get("reorder_point") or "0").strip()
         default_location_id_raw = (request.form.get("default_location_id") or "").strip()
+        track_lots = 1 if (request.form.get("track_lots") == "1") else 0
 
         if not name:
             flash("品目名を入力してください。", "error")
@@ -270,23 +280,21 @@ def create_app():
                 return redirect(url_for("items_new"))
 
         db = get_db()
-
         dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
         if dup:
             flash("同じ品目名がすでに存在します。", "error")
             return redirect(url_for("items_new"))
 
         created_by = int(current["id"])
-
         try:
             cur = db.execute(
                 """
                 INSERT INTO items (
                   name, category, unit, reorder_point, track_lots, is_active,
                   default_location_id, created_by, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 0, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
                 """,
-                (name, category, unit, reorder_point, default_location_id, created_by),
+                (name, category, unit, reorder_point, track_lots, default_location_id, created_by),
             )
             item_id = cur.lastrowid
 
@@ -294,7 +302,6 @@ def create_app():
                 "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
                 (item_id,),
             )
-
             db.commit()
         except Exception as e:
             db.rollback()
@@ -304,7 +311,7 @@ def create_app():
         flash("品目を登録しました。", "success")
         return redirect(url_for("items_list"))
 
-    # 削除した品目一覧（店主のみ）
+    # ---- 削除した品目一覧（店主のみ）
     @app.get("/items/inactive")
     def items_inactive():
         current = get_current_user()
@@ -329,7 +336,7 @@ def create_app():
         ).fetchall()
         return render_template("items_inactive.html", items=rows)
 
-    # 復元（店主のみ）
+    # ---- 復元（店主のみ）
     @app.post("/items/<int:item_id>/restore")
     def item_restore(item_id: int):
         current = get_current_user()
@@ -360,7 +367,44 @@ def create_app():
         flash(f"「{item['name']}」を復元しました。", "success")
         return redirect(url_for("items_inactive"))
 
-    # 履歴
+    # ✅ これが無くて BuildError になってたやつ
+    # ---- 論理削除（店主のみ）
+    @app.post("/items/<int:item_id>/delete", endpoint="item_delete")
+    def item_delete(item_id: int):
+        current = get_current_user()
+        if current["role"] != "owner":
+            flash("削除は店主のみできます。", "error")
+            return redirect(url_for("items_list"))
+
+        db = get_db()
+        try:
+            item = db.execute(
+                "SELECT id, name, is_active FROM items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+
+            if item is None:
+                flash("品目が見つかりません。", "error")
+                return redirect(url_for("items_list"))
+
+            if int(item["is_active"]) == 0:
+                flash("この品目はすでに削除済みです。", "error")
+                return redirect(url_for("items_list"))
+
+            db.execute(
+                "UPDATE items SET is_active = 0, updated_at = datetime('now','localtime') WHERE id = ?",
+                (item_id,),
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            flash(f"削除に失敗しました: {e}", "error")
+            return redirect(url_for("items_list"))
+
+        flash(f"「{item['name']}」を削除しました。", "success")
+        return redirect(url_for("items_list"))
+
+    # ---- 履歴
     @app.get("/moves")
     def moves_list():
         db = get_db()
@@ -384,7 +428,7 @@ def create_app():
         ).fetchall()
         return render_template("moves_list.html", moves=rows)
 
-    # 在庫増減（クイック）
+    # ---- 在庫増減（クイック）
     @app.post("/items/<int:item_id>/adjust")
     def item_adjust(item_id: int):
         current = get_current_user()
@@ -395,7 +439,7 @@ def create_app():
             flash("操作が不正です。", "error")
             return redirect(url_for("items_list"))
 
-        qty = int(quick.replace("+", "").replace("-", ""))
+        qty = int(quick.replace("+", "").replace("-", ""))  # 1 or 5
         move_type = "IN" if quick.startswith("+") else "OUT"
         delta = qty if move_type == "IN" else -qty
         note = None
@@ -427,6 +471,7 @@ def create_app():
                 flash("在庫がマイナスになるため、この操作はできません。", "error")
                 return redirect(url_for("items_list"))
 
+            # 履歴
             db.execute(
                 """
                 INSERT INTO stock_moves (move_type, item_id, qty, performed_by, note, occurred_at, created_at)
@@ -435,6 +480,7 @@ def create_app():
                 (move_type, item_id, qty, performed_by, note),
             )
 
+            # 在庫更新
             if row is None:
                 db.execute(
                     """
@@ -453,6 +499,7 @@ def create_app():
                     (new_qty, item_id),
                 )
 
+            # 通知
             upsert_low_stock_notification(
                 db=db,
                 item_id=int(item["id"]),
@@ -475,13 +522,11 @@ def create_app():
     return app
 
 
-# ★ gunicorn / Render 用：importされたときに app が存在するようにする
+# ✅ gunicorn / Render 用：importされたときに app が存在するようにする
 app = create_app()
 
-
-# ローカル実行用
+# ✅ ローカル実行用
 if __name__ == "__main__":
     import os
-
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     app.run(host="0.0.0.0", port=port, debug=True)
