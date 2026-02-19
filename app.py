@@ -13,32 +13,30 @@ def create_app():
     # =========================
     def get_or_create_owner_id() -> int:
         owner = execute(
-        "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
-    ).fetchone()
-    if owner is not None:
-        # psycopg(dict_row)でもsqlite(Row)でもOKにする
-        return int(owner["id"])
+            "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
+        ).fetchone()
+        if owner is not None:
+            return int(owner["id"])
 
-    owner_id = insert_returning_id(
-        "INSERT INTO users (username, role) VALUES (?, ?)",
-        ("吉田", "owner"),
-    )
-    commit()
-    return int(owner_id)
-     
+        owner_id = insert_returning_id(
+            "INSERT INTO users (username, role) VALUES (?, ?)",
+            ("吉田", "owner"),
+        )
+        commit()
+        return int(owner_id)
 
     def ensure_demo_staff():
         for name in ("東", "大橋"):
             exists = execute(
-            "SELECT 1 FROM users WHERE username = ? AND role='staff' LIMIT 1",
-            (name,),
-        ).fetchone()
-        if not exists:
-            execute(
-                "INSERT INTO users (username, role) VALUES (?, ?)",
-                (name, "staff"),
-            )
-    commit()
+                "SELECT 1 FROM users WHERE username = ? AND role='staff' LIMIT 1",
+                (name,),
+            ).fetchone()
+            if not exists:
+                execute(
+                    "INSERT INTO users (username, role) VALUES (?, ?)",
+                    (name, "staff"),
+                )
+        commit()
 
     def get_current_user():
         db = get_db()
@@ -367,7 +365,6 @@ def create_app():
         flash(f"「{item['name']}」を復元しました。", "success")
         return redirect(url_for("items_inactive"))
 
-    # ✅ これが無くて BuildError になってたやつ
     # ---- 論理削除（店主のみ）
     @app.post("/items/<int:item_id>/delete", endpoint="item_delete")
     def item_delete(item_id: int):
@@ -471,7 +468,6 @@ def create_app():
                 flash("在庫がマイナスになるため、この操作はできません。", "error")
                 return redirect(url_for("items_list"))
 
-            # 履歴
             db.execute(
                 """
                 INSERT INTO stock_moves (move_type, item_id, qty, performed_by, note, occurred_at, created_at)
@@ -480,7 +476,6 @@ def create_app():
                 (move_type, item_id, qty, performed_by, note),
             )
 
-            # 在庫更新
             if row is None:
                 db.execute(
                     """
@@ -499,7 +494,6 @@ def create_app():
                     (new_qty, item_id),
                 )
 
-            # 通知
             upsert_low_stock_notification(
                 db=db,
                 item_id=int(item["id"]),
@@ -524,6 +518,7 @@ def create_app():
 
 # ✅ gunicorn / Render 用：importされたときに app が存在するようにする
 app = create_app()
+
 
 # ✅ ローカル実行用
 if __name__ == "__main__":
