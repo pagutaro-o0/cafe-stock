@@ -1,6 +1,14 @@
 # app.py
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from db import get_db, close_db, init_db as db_init_db, execute, insert_returning_id, commit
+from db import (
+    get_db,
+    close_db,
+    init_db as db_init_db,
+    execute,
+    insert_returning_id,
+    commit,
+    is_postgres,
+)
 
 
 def create_app():
@@ -11,6 +19,14 @@ def create_app():
     # =========================
     # Helpers
     # =========================
+    def now_sql() -> str:
+        # INSERT/UPDATEの現在時刻
+        return "NOW()" if is_postgres() else "datetime('now','localtime')"
+
+    def order_name_sql(col: str) -> str:
+        # 文字列並び替え（NOCASE相当）
+        return f"LOWER({col}) ASC" if is_postgres() else f"{col} COLLATE NOCASE ASC"
+
     def get_or_create_owner_id() -> int:
         owner = execute(
             "SELECT id FROM users WHERE role='owner' ORDER BY id ASC LIMIT 1"
@@ -39,11 +55,10 @@ def create_app():
         commit()
 
     def get_current_user():
-        db = get_db()
         uid = session.get("user_id")
 
         if uid is not None:
-            u = db.execute(
+            u = execute(
                 "SELECT id, username, role FROM users WHERE id = ?",
                 (uid,),
             ).fetchone()
@@ -51,7 +66,7 @@ def create_app():
                 return u
 
         owner_id = get_or_create_owner_id()
-        u = db.execute(
+        u = execute(
             "SELECT id, username, role FROM users WHERE id = ?",
             (owner_id,),
         ).fetchone()
@@ -59,7 +74,6 @@ def create_app():
         return u
 
     def upsert_low_stock_notification(
-        db,
         item_id: int,
         item_name: str,
         unit: str,
@@ -71,7 +85,7 @@ def create_app():
             return
 
         if float(current_qty) < float(reorder_point):
-            exists = db.execute(
+            exists = execute(
                 """
                 SELECT id FROM notifications
                 WHERE item_id = ? AND type = 'LOW_STOCK' AND is_read = 0
@@ -83,32 +97,33 @@ def create_app():
                 return
 
             msg = f"在庫が少ない: {item_name}（{current_qty:g}{unit} / 目安 {reorder_point:g}{unit}）"
-            db.execute(
-                """
+            execute(
+                f"""
                 INSERT INTO notifications (item_id, type, message, is_read, created_by, created_at)
-                VALUES (?, 'LOW_STOCK', ?, 0, ?, datetime('now','localtime'))
+                VALUES (?, 'LOW_STOCK', ?, 0, ?, {now_sql()})
                 """,
                 (item_id, msg, created_by),
             )
         else:
-            db.execute(
-                """
+            execute(
+                f"""
                 UPDATE notifications
-                SET is_read = 1, read_at = datetime('now','localtime')
+                SET is_read = 1, read_at = {now_sql()}
                 WHERE item_id = ? AND type = 'LOW_STOCK' AND is_read = 0
                 """,
                 (item_id,),
             )
+
+        commit()
 
     # =========================
     # inject globals (base.html用)
     # =========================
     @app.context_processor
     def inject_globals():
-        db = get_db()
         unread_count = 0
         try:
-            unread = db.execute(
+            unread = execute(
                 "SELECT COUNT(*) AS c FROM notifications WHERE is_read = 0"
             ).fetchone()
             unread_count = int(unread["c"]) if unread else 0
@@ -138,8 +153,7 @@ def create_app():
     # ---- ユーザー切替（一覧）
     @app.get("/whoami")
     def whoami():
-        db = get_db()
-        users = db.execute(
+        users = execute(
             """
             SELECT id, username, role
             FROM users
@@ -159,8 +173,7 @@ def create_app():
             flash("ユーザーが不正です。", "error")
             return redirect(url_for("whoami"))
 
-        db = get_db()
-        u = db.execute(
+        u = execute(
             "SELECT id, username, role FROM users WHERE id = ?",
             (uid,),
         ).fetchone()
@@ -176,8 +189,7 @@ def create_app():
     # ---- 通知一覧
     @app.get("/notifications")
     def notifications_list():
-        db = get_db()
-        rows = db.execute(
+        rows = execute(
             """
             SELECT id, message, is_read, created_at, read_at
             FROM notifications
@@ -190,24 +202,23 @@ def create_app():
     # ---- 通知を既読
     @app.post("/notifications/<int:notif_id>/read")
     def notifications_read(notif_id: int):
-        db = get_db()
-        db.execute(
-            """
+        execute(
+            f"""
             UPDATE notifications
-            SET is_read = 1, read_at = datetime('now','localtime')
+            SET is_read = 1, read_at = {now_sql()}
             WHERE id = ?
             """,
             (notif_id,),
         )
-        db.commit()
+        commit()
         return redirect(url_for("notifications_list"))
 
     # ---- 品目一覧（有効）
     @app.get("/items")
     def items_list():
-        db = get_db()
-        rows = db.execute(
-            """
+        order_by = order_name_sql("i.name")
+        rows = execute(
+            f"""
             SELECT
               i.id, i.name, i.category, i.unit, i.reorder_point, i.track_lots,
               i.is_active,
@@ -217,7 +228,7 @@ def create_app():
             LEFT JOIN storage_locations sl ON sl.id = i.default_location_id
             LEFT JOIN item_stock s ON s.item_id = i.id
             WHERE i.is_active = 1
-            ORDER BY i.name COLLATE NOCASE ASC
+            ORDER BY {order_by}
             """
         ).fetchall()
         return render_template("items_list.html", items=rows)
@@ -230,9 +241,9 @@ def create_app():
             flash("品目の追加は店主のみできます。", "error")
             return redirect(url_for("items_list"))
 
-        db = get_db()
-        locations = db.execute(
-            "SELECT id, name FROM storage_locations ORDER BY name COLLATE NOCASE ASC"
+        order_by = order_name_sql("name")
+        locations = execute(
+            f"SELECT id, name FROM storage_locations ORDER BY {order_by}"
         ).fetchall()
         return render_template("items_new.html", locations=locations)
 
@@ -277,32 +288,32 @@ def create_app():
                 flash("保管場所が不正です。", "error")
                 return redirect(url_for("items_new"))
 
-        db = get_db()
-        dup = db.execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
+        dup = execute("SELECT 1 FROM items WHERE name = ? LIMIT 1", (name,)).fetchone()
         if dup:
             flash("同じ品目名がすでに存在します。", "error")
             return redirect(url_for("items_new"))
 
         created_by = int(current["id"])
+
         try:
-            cur = db.execute(
-                """
+            item_id = insert_returning_id(
+                f"""
                 INSERT INTO items (
                   name, category, unit, reorder_point, track_lots, is_active,
                   default_location_id, created_by, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, {now_sql()}, {now_sql()})
                 """,
                 (name, category, unit, reorder_point, track_lots, default_location_id, created_by),
             )
-            item_id = cur.lastrowid
 
-            db.execute(
-                "INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, datetime('now','localtime'))",
+            execute(
+                f"INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, 0, {now_sql()})",
                 (item_id,),
             )
-            db.commit()
+
+            commit()
         except Exception as e:
-            db.rollback()
+            # execute()がtransaction管理してる想定なので、ここは握りつぶさずにメッセージだけ
             flash(f"登録に失敗しました: {e}", "error")
             return redirect(url_for("items_new"))
 
@@ -317,9 +328,9 @@ def create_app():
             flash("確認できるのは店主のみです。", "error")
             return redirect(url_for("items_list"))
 
-        db = get_db()
-        rows = db.execute(
-            """
+        order_by = order_name_sql("i.name")
+        rows = execute(
+            f"""
             SELECT
               i.id, i.name, i.category, i.unit, i.reorder_point, i.track_lots,
               i.is_active,
@@ -329,7 +340,7 @@ def create_app():
             LEFT JOIN storage_locations sl ON sl.id = i.default_location_id
             LEFT JOIN item_stock s ON s.item_id = i.id
             WHERE i.is_active = 0
-            ORDER BY i.name COLLATE NOCASE ASC
+            ORDER BY {order_by}
             """
         ).fetchall()
         return render_template("items_inactive.html", items=rows)
@@ -342,25 +353,19 @@ def create_app():
             flash("復元は店主のみできます。", "error")
             return redirect(url_for("items_list"))
 
-        db = get_db()
-        try:
-            item = db.execute(
-                "SELECT id, name, is_active FROM items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-            if item is None:
-                flash("品目が見つかりません。", "error")
-                return redirect(url_for("items_inactive"))
-
-            db.execute(
-                "UPDATE items SET is_active = 1, updated_at = datetime('now','localtime') WHERE id = ?",
-                (item_id,),
-            )
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            flash(f"復元に失敗しました: {e}", "error")
+        item = execute(
+            "SELECT id, name, is_active FROM items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if item is None:
+            flash("品目が見つかりません。", "error")
             return redirect(url_for("items_inactive"))
+
+        execute(
+            f"UPDATE items SET is_active = 1, updated_at = {now_sql()} WHERE id = ?",
+            (item_id,),
+        )
+        commit()
 
         flash(f"「{item['name']}」を復元しました。", "success")
         return redirect(url_for("items_inactive"))
@@ -373,30 +378,25 @@ def create_app():
             flash("削除は店主のみできます。", "error")
             return redirect(url_for("items_list"))
 
-        db = get_db()
-        try:
-            item = db.execute(
-                "SELECT id, name, is_active FROM items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-
-            if item is None:
-                flash("品目が見つかりません。", "error")
-                return redirect(url_for("items_list"))
-
-            if int(item["is_active"]) == 0:
-                flash("この品目はすでに削除済みです。", "error")
-                return redirect(url_for("items_list"))
-
-            db.execute(
-                "UPDATE items SET is_active = 0, updated_at = datetime('now','localtime') WHERE id = ?",
-                (item_id,),
-            )
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            flash(f"削除に失敗しました: {e}", "error")
+        item = execute(
+            "SELECT id, name, is_active FROM items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if item is None:
+            flash("品目が見つかりません。", "error")
             return redirect(url_for("items_list"))
+
+        # Postgresだと is_active が boolean なので int() しない
+        is_active = item["is_active"]
+        if (is_postgres() and is_active is False) or ((not is_postgres()) and int(is_active) == 0):
+            flash("この品目はすでに削除済みです。", "error")
+            return redirect(url_for("items_list"))
+
+        execute(
+            f"UPDATE items SET is_active = 0, updated_at = {now_sql()} WHERE id = ?",
+            (item_id,),
+        )
+        commit()
 
         flash(f"「{item['name']}」を削除しました。", "success")
         return redirect(url_for("items_list"))
@@ -404,8 +404,7 @@ def create_app():
     # ---- 履歴
     @app.get("/moves")
     def moves_list():
-        db = get_db()
-        rows = db.execute(
+        rows = execute(
             """
             SELECT
               sm.id,
@@ -439,86 +438,71 @@ def create_app():
         qty = int(quick.replace("+", "").replace("-", ""))  # 1 or 5
         move_type = "IN" if quick.startswith("+") else "OUT"
         delta = qty if move_type == "IN" else -qty
-        note = None
 
-        db = get_db()
-        try:
-            item = db.execute(
-                """
-                SELECT id, name, unit, reorder_point
-                FROM items
-                WHERE id = ? AND is_active = 1
-                """,
-                (item_id,),
-            ).fetchone()
-
-            if item is None:
-                flash("品目が見つかりません。", "error")
-                return redirect(url_for("items_list"))
-
-            row = db.execute(
-                "SELECT current_qty FROM item_stock WHERE item_id = ?",
-                (item_id,),
-            ).fetchone()
-
-            current_qty = float(row["current_qty"]) if row else 0.0
-            new_qty = current_qty + float(delta)
-
-            if new_qty < 0:
-                flash("在庫がマイナスになるため、この操作はできません。", "error")
-                return redirect(url_for("items_list"))
-
-            db.execute(
-                """
-                INSERT INTO stock_moves (move_type, item_id, qty, performed_by, note, occurred_at, created_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                """,
-                (move_type, item_id, qty, performed_by, note),
-            )
-
-            if row is None:
-                db.execute(
-                    """
-                    INSERT INTO item_stock (item_id, current_qty, updated_at)
-                    VALUES (?, ?, datetime('now','localtime'))
-                    """,
-                    (item_id, new_qty),
-                )
-            else:
-                db.execute(
-                    """
-                    UPDATE item_stock
-                    SET current_qty = ?, updated_at = datetime('now','localtime')
-                    WHERE item_id = ?
-                    """,
-                    (new_qty, item_id),
-                )
-
-            upsert_low_stock_notification(
-                db=db,
-                item_id=int(item["id"]),
-                item_name=str(item["name"]),
-                unit=str(item["unit"]),
-                current_qty=float(new_qty),
-                reorder_point=float(item["reorder_point"] or 0),
-                created_by=performed_by,
-            )
-
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            flash(f"在庫更新に失敗しました: {e}", "error")
+        item = execute(
+            """
+            SELECT id, name, unit, reorder_point
+            FROM items
+            WHERE id = ? AND is_active = 1
+            """,
+            (item_id,),
+        ).fetchone()
+        if item is None:
+            flash("品目が見つかりません。", "error")
             return redirect(url_for("items_list"))
 
+        row = execute(
+            "SELECT current_qty FROM item_stock WHERE item_id = ?",
+            (item_id,),
+        ).fetchone()
+
+        current_qty = float(row["current_qty"]) if row else 0.0
+        new_qty = current_qty + float(delta)
+
+        if new_qty < 0:
+            flash("在庫がマイナスになるため、この操作はできません。", "error")
+            return redirect(url_for("items_list"))
+
+        # 履歴
+        execute(
+            f"""
+            INSERT INTO stock_moves (move_type, item_id, qty, performed_by, note, occurred_at, created_at)
+            VALUES (?, ?, ?, ?, ?, {now_sql()}, {now_sql()})
+            """,
+            (move_type, item_id, qty, performed_by, None),
+        )
+
+        # 在庫更新
+        if row is None:
+            execute(
+                f"INSERT INTO item_stock (item_id, current_qty, updated_at) VALUES (?, ?, {now_sql()})",
+                (item_id, new_qty),
+            )
+        else:
+            execute(
+                f"UPDATE item_stock SET current_qty = ?, updated_at = {now_sql()} WHERE item_id = ?",
+                (new_qty, item_id),
+            )
+
+        # 通知
+        upsert_low_stock_notification(
+            item_id=int(item["id"]),
+            item_name=str(item["name"]),
+            unit=str(item["unit"]),
+            current_qty=float(new_qty),
+            reorder_point=float(item["reorder_point"] or 0),
+            created_by=performed_by,
+        )
+
+        commit()
         flash("在庫を更新しました。", "success")
         return redirect(url_for("items_list"))
 
     return app
 
 
-# ✅ gunicorn / Render 用：importされたときに app が存在するようにする
+# ✅ gunicorn / Render 用
 app = create_app()
-
 
 # ✅ ローカル実行用
 if __name__ == "__main__":

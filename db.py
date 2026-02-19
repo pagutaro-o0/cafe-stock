@@ -246,3 +246,21 @@ def init_db():
     """)
 
     db.commit()
+    # db.py に追加（末尾あたりでOK）
+
+def now_sql() -> str:
+    return "NOW()" if is_postgres() else "datetime('now','localtime')"
+
+def active_sql() -> str:
+    return "TRUE" if is_postgres() else "1"
+
+def inactive_sql() -> str:
+    return "FALSE" if is_postgres() else "0"
+
+def order_name_sql(col: str) -> str:
+    # col 例: "i.name"
+    return f"LOWER({col})" if is_postgres() else f"{col} COLLATE NOCASE"
+from flask import g
+
+def db_kind() -> str:
+    return getattr(g, "db_kind", "sqlite")
